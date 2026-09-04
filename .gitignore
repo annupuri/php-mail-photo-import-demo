@@ -1,0 +1,22 @@
+### Runtime data ###
+# Photos decoded from mail are written here by the app; keep the directory, not its contents.
+/images/*
+!/images/.gitkeep
+
+### PHP ###
+vendor/
+composer.lock
+*.log
+
+### asdf / local tooling ###
+.php-version
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+nbproject/
+
+### OS ###
+.DS_Store
+Thumbs.db
