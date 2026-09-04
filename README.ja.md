@@ -48,7 +48,7 @@ Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / 
 含む 2 つのメッセージ変数だけが例外です。
 
 **取り込み経路としてのメール。** `storeMail($user)` が
-`{_MAIL_SERVER:143/imap/norsh/notls}INBOX` を開き、`getAttachedMail()` は、デコード後の
+`{_MAIL_SERVER:_MAIL_PORT/imap/norsh/notls}INBOX` を開き、`getAttachedMail()` は、デコード後の
 件名が `$user` に一致し、構造が `multipart/mixed` のメッセージだけを残します。`JPEG` /
 `PNG` / `GIF` / `BMP` の各パートについてタイムスタンプ由来のファイル名を作り、
 `imap_fetchbody()` + `imap_base64()` でバイト列を得てファイルに書き、`insertDB()` で行を
@@ -124,8 +124,8 @@ Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / 
 
    | 定数                        | 既定値              | 意味                                |
    | --------------------------- | ------------------- | ----------------------------------- |
-   | `_MAIL_SERVER`              | `mail.example.com`  | IMAP ホスト                         |
-   | `_MAIL_PORT`                | `143`               | IMAP ポート                         |
+   | `_MAIL_SERVER`              | `127.0.0.1`         | IMAP ホスト                         |
+   | `_MAIL_PORT`                | `3143`              | IMAP ポート(GreenMail のテストポート) |
    | `_MAIL_FLAGS`               | `/imap/norsh/notls` | `imap_open()` のフラグ(`/imap/ssl` 等) |
    | `_MAIL_USER` / `_MAIL_PASS` | `demo` / `demo`     | メールボックスのログイン            |
    | `_DB_HOST`                  | `localhost`         | MySQL ホスト                        |
@@ -194,9 +194,10 @@ java -Dgreenmail.setup.test.all -Dgreenmail.users=demo:demo@localhost \
 だけなので、配送確認は `curl -s http://127.0.0.1:8080/api/user/demo@localhost/messages`
 で行います(全体を返す `/api/messages` は無く、`/api/user` はアカウント一覧です)。
 
-これで IMAP が `3143`、SMTP が `3025` で立ち上がるので、`dao.php` の `_MAIL_SERVER` を
-`127.0.0.1`、`_MAIL_PORT` を `3143` にします(`localhost` は IPv6 `::1` に解決され、
-GreenMail が待ち受けていない場合があるので IP で指定)。
+これで IMAP が `3143`、SMTP が `3025` で立ち上がります。`dao.php` の `_MAIL_SERVER` /
+`_MAIL_PORT` は既定でここ(`127.0.0.1` / `3143`)を指しています(`localhost` ではなく IP
+なのは、`::1` に解決されて GreenMail が待ち受けていない場合があるため)。別の IMAP サーバ
+を使うときだけ書き換えてください。
 
 `getAttachedMail()` は、デコード後の件名がログイン用ユーザ ID と**完全一致**し、最上位が
 `multipart/mixed`、かつ画像パートが `base64` エンコードのメールだけを残します。通常の

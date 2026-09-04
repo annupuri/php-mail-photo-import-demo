@@ -48,7 +48,7 @@ where it is printed, with `h()` (`htmlspecialchars`) in the templates. The two
 message variables that intentionally carry `<br>` markup are the only exceptions.
 
 **Mail as the ingest path.** `storeMail($user)` opens
-`{_MAIL_SERVER:143/imap/norsh/notls}INBOX`, and `getAttachedMail()` keeps only
+`{_MAIL_SERVER:_MAIL_PORT/imap/norsh/notls}INBOX`, and `getAttachedMail()` keeps only
 messages whose decoded subject equals `$user` and whose structure is
 `multipart/mixed`. For each `JPEG` / `PNG` / `GIF` / `BMP` part it makes a
 timestamp-based file name, `imap_fetchbody()` + `imap_base64()` to get the bytes,
@@ -128,8 +128,8 @@ touch rows that belong to the logged-in user id.
 
    | Constant                    | Default             | Meaning                              |
    | --------------------------- | ------------------- | ------------------------------------ |
-   | `_MAIL_SERVER`              | `mail.example.com`  | IMAP host                            |
-   | `_MAIL_PORT`                | `143`               | IMAP port                            |
+   | `_MAIL_SERVER`              | `127.0.0.1`         | IMAP host                            |
+   | `_MAIL_PORT`                | `3143`              | IMAP port (GreenMail's test port)   |
    | `_MAIL_FLAGS`               | `/imap/norsh/notls` | `imap_open()` flags (`/imap/ssl`, …) |
    | `_MAIL_USER` / `_MAIL_PASS` | `demo` / `demo`     | mailbox login                        |
    | `_DB_HOST`                  | `localhost`         | MySQL host                           |
@@ -199,9 +199,10 @@ has no web console — port `8080` serves only a REST API, so check delivery wit
 `curl -s http://127.0.0.1:8080/api/user/demo@localhost/messages` (there is no
 global `/api/messages`; `/api/user` lists the accounts).
 
-That serves IMAP on `3143` and SMTP on `3025`, so set `_MAIL_SERVER` to
-`127.0.0.1` and `_MAIL_PORT` to `3143` in `dao.php` (use the IP, not `localhost` —
-it may resolve to IPv6 `::1`, where GreenMail is not listening).
+That serves IMAP on `3143` and SMTP on `3025`, which is what `dao.php` already
+points `_MAIL_SERVER` / `_MAIL_PORT` at (`127.0.0.1`, not `localhost` — the latter
+may resolve to IPv6 `::1`, where GreenMail is not listening). Point them elsewhere
+only if your IMAP server differs.
 
 `getAttachedMail()` keeps a message only if its decoded subject is *exactly* the
 login user id, its top level is `multipart/mixed`, and its image part is
