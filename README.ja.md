@@ -28,12 +28,12 @@ MySQL へ 1 行記録します。あとは各写真にタイトル・場所・�
 
 ## 技術スタック
 
-`mysqli` / `mbstring` 拡張を有効にした PHP 8.3 と MySQL。フレームワークはなし。
+`mysqli` / `mbstring` 拡張を有効にした PHP 8.5 と MySQL。フレームワークはなし。
 ページスクリプト(`index` / `main` / `edit` / `mail`)と `dao.php` / `i18n.php`、
 それに `lang/` のカタログだけです。Composer 依存は `mail.php` が使う純 PHP の IMAP
 クライアント [ImapEngine](https://github.com/DirectoryTree/ImapEngine) の 1 つだけで、
 `imap` 拡張(PHP 8.4 で本体から分離)は不要です。
-`.tool-versions` は [asdf](https://asdf-vm.com) 用に PHP 8.3.33 を pin しています。
+`.tool-versions` は [asdf](https://asdf-vm.com) 用に PHP 8.5.12 を pin しています。
 
 ## 設計
 
