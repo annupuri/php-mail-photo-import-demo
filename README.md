@@ -28,12 +28,12 @@ can caption each photo, give it a place and a comment, or delete it.
 
 ## Stack
 
-PHP 8.3 with the `mysqli` and `mbstring` extensions, and MySQL. No framework —
+PHP 8.5 with the `mysqli` and `mbstring` extensions, and MySQL. No framework —
 `index` / `main` / `edit` / `mail`, `dao.php`, `i18n.php`, and a `lang/`
 catalogue. The one Composer dependency is
 [ImapEngine](https://github.com/DirectoryTree/ImapEngine), a pure-PHP IMAP
 client used by `mail.php`, so the `imap` extension (unbundled from PHP in 8.4)
-is not needed. `.tool-versions` pins PHP 8.3.33 for [asdf](https://asdf-vm.com).
+is not needed. `.tool-versions` pins PHP 8.5.12 for [asdf](https://asdf-vm.com).
 
 ## Design
 
