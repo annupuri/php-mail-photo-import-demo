@@ -70,6 +70,11 @@ MySQL へ 1 行記録します。あとは各写真にタイトル・場所・�
    composer install
    ```
 
+   `git pull` の後(あるいは `composer.lock` が変わったとき)は、毎回
+   `composer install` を実行して `vendor/` を lock ファイルに合わせてください。
+   `vendor/` が無いと `mail.php` が `vendor/autoload.php` を読み込めず、ギャラリー画面が
+   エラーになります。
+
 2. **MySQL を起動する。** MySQL 8.0 以降 / MariaDB 10.4 以降なら何でも可(SQL は
    バージョン非依存)。`asdf install mysql 8.0.33`(要 `asdf plugin add mysql`)は
    公式バイナリ tarball を展開するだけなので、データディレクトリの初期化と

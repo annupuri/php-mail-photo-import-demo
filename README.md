@@ -71,6 +71,11 @@ touch rows that belong to the logged-in user id.
    composer install
    ```
 
+   Run `composer install` again after every `git pull` (or whenever
+   `composer.lock` changes) so `vendor/` matches the lock file. Without
+   `vendor/`, `mail.php` cannot load `vendor/autoload.php` and the gallery page
+   fails.
+
 2. **Start MySQL.** Any MySQL 8.0+ / MariaDB 10.4+ works — the SQL is
    version-agnostic. `asdf install mysql 8.0.33` (needs `asdf plugin add mysql`)
    only unpacks the official binary tarball; you initialise a data directory
