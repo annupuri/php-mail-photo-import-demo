@@ -4,12 +4,12 @@
     "type": "project",
     "license": "MIT",
     "require": {
-        "php": "^8.3",
+        "php": "^8.5",
         "directorytree/imapengine": "^1.25"
     },
     "config": {
         "platform": {
-            "php": "8.3.33"
+            "php": "8.5.12"
         }
     }
 }
