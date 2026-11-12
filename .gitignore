@@ -9,6 +9,8 @@ vendor/
 
 ### asdf / local tooling ###
 .php-version
+# Local scratch space (e.g. the GreenMail jar for trying the mail import)
+/tmp/
 
 ### IDE ###
 .idea/
