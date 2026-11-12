@@ -1,4 +1,8 @@
 <?php
+require_once __DIR__ . '/vendor/autoload.php';
+
+use DirectoryTree\ImapEngine\Mailbox;
+
 // Time limit: 120 seconds.
 set_time_limit(120);
 
@@ -11,6 +15,7 @@ function storeMail($user) {
     }
 
     $mailArray = getAttachedMail($mailBox, $user);
+    $mailBox->disconnect();
     if (count($mailArray) == 0) {
         return '';
     }
@@ -21,53 +26,59 @@ function storeMail($user) {
 }
 
 function getMailBox() {
-    // e.g. {mail.example.com:143/imap/norsh/notls}INBOX
-    $mailbox = '{' . _MAIL_SERVER . ':' . _MAIL_PORT . _MAIL_FLAGS . '}INBOX';
+    $mailBox = new Mailbox([
+        'host' => _MAIL_SERVER,
+        'port' => _MAIL_PORT,
+        'encryption' => _MAIL_ENCRYPTION, // '' (plain), 'ssl', 'tls' or 'starttls'
+        'username' => _MAIL_USER,
+        'password' => _MAIL_PASS,
+    ]);
 
     // Open the mailbox with the configured account.
-    return @imap_open($mailbox, _MAIL_USER, _MAIL_PASS);
+    try {
+        $mailBox->connect();
+    } catch (Throwable $e) {
+        return false;
+    }
+    return $mailBox;
 }
 
 function getAttachedMail($mailBox, $user) {
-    mb_internal_encoding('utf-8');
-    $boxes = imap_check($mailBox);
+    $inbox = $mailBox->inbox();
+    $messages = $inbox->messages()->withHeaders()->withBody()->get();
 
     $mailArray = array();
-    for ($i = 1; $i <= $boxes->Nmsgs; $i++) {
-        $head = imap_headerinfo($mailBox, $i);
-        $structure = imap_fetchstructure($mailBox, $i);
-        $subject = mb_decode_mimeheader($head->subject);
-
+    foreach ($messages as $msg) {
         // Only handle mail whose subject is the user id and that has attachments.
-        if ($subject == $user && $structure->subtype == 'MIXED') {
-            $mail = array();
-            $mail['date'] = $head->date;
-            $mail['from'] = $head->from[0]->mailbox . '@' . $head->from[0]->host;
-
-            $imgArray = array();
-            for ($j = 0; $j < count($structure->parts); $j++) {
-                if (!preg_match('/^(JPEG|BMP|PNG|GIF)$/', $structure->parts[$j]->subtype, $match)) {
-                    // Skip anything that is not JPEG / BMP / PNG / GIF.
-                    continue;
-                }
-                // Name the image from the current time.
-                $mic_time = microtime();
-                $fileName = substr($mic_time, 11) . substr($mic_time, 2, 6);
-                $fileName .= '.' . strtolower($match[0]);
-
-                $fileBody = imap_fetchbody($mailBox, $i, $j + 1);        // image bytes
-                $img = array('name' => $fileName, 'body' => $fileBody);
-                $imgArray[] = $img;
-            }
-            $mail['img'] = $imgArray;
-            $mailArray[] = $mail;
-            // Flag the message for deletion.
-            imap_delete($mailBox, $i);
+        if ($msg->subject() !== $user || !$msg->hasAttachments()) {
+            continue;
         }
 
+        $mail = array();
+        $mail['date'] = $msg->date()?->toRfc2822String();
+        $mail['from'] = $msg->from()?->email();
+
+        $imgArray = array();
+        foreach ($msg->attachments() as $attachment) {
+            if (!preg_match('#^image/(jpeg|bmp|png|gif)$#i', $attachment->contentType(), $match)) {
+                // Skip anything that is not JPEG / BMP / PNG / GIF.
+                continue;
+            }
+            // Name the image from the current time.
+            $mic_time = microtime();
+            $fileName = substr($mic_time, 11) . substr($mic_time, 2, 6);
+            $fileName .= '.' . strtolower($match[1]);
+
+            $img = array('name' => $fileName, 'body' => $attachment->contents()); // decoded image bytes
+            $imgArray[] = $img;
+        }
+        $mail['img'] = $imgArray;
+        $mailArray[] = $mail;
+        // Flag the message for deletion.
+        $msg->markDeleted();
     }
     // Expunge the flagged messages.
-    imap_expunge($mailBox);
+    $inbox->expunge();
 
     return $mailArray;
 }
@@ -81,14 +92,12 @@ function mailRegister($mailArray, $user)
 
     foreach ($mailArray as $mail) {
         foreach ($mail['img'] as $img) {
-            // Decode the image.
-            $decodedImage = imap_base64($img['body']);
             $error = '';
             if (!$fp = fopen(_IMAGE_DIR . $img['name'], 'w')) {
                 $error = t('file_open_failed', $img['name']);
             }
             if ($error == '') {
-                if (!fwrite($fp, $decodedImage)) {
+                if (!fwrite($fp, $img['body'])) {
                     $error = t('file_write_failed', $img['name']);
                 }
                 fclose($fp);

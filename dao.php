@@ -3,7 +3,7 @@
 // Mail server that the photo-bearing messages are fetched from.
 define('_MAIL_SERVER', '127.0.0.1');        // IMAP server host name
 define('_MAIL_PORT', 3143);                 // IMAP server port
-define('_MAIL_FLAGS', '/imap/norsh/notls'); // imap_open() flags, e.g. /imap/ssl for a TLS server
+define('_MAIL_ENCRYPTION', '');             // '' (plain), 'ssl', 'tls' or 'starttls'
 define('_MAIL_USER', 'demo');               // mailbox account
 define('_MAIL_PASS', 'demo');               // mailbox password
 define('_IMAGE_DIR', './images/');          // directory the decoded images are written to
