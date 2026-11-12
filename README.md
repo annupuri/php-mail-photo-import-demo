@@ -28,10 +28,12 @@ can caption each photo, give it a place and a comment, or delete it.
 
 ## Stack
 
-PHP 8.3 with the `mysqli`, `mbstring` and `imap` extensions, and MySQL. No
-framework and no Composer dependencies — `index` / `main` / `edit` / `mail`,
-`dao.php`, `i18n.php`, and a `lang/` catalogue. `.tool-versions` pins PHP 8.3.33
-for [asdf](https://asdf-vm.com).
+PHP 8.3 with the `mysqli` and `mbstring` extensions, and MySQL. No framework —
+`index` / `main` / `edit` / `mail`, `dao.php`, `i18n.php`, and a `lang/`
+catalogue. The one Composer dependency is
+[ImapEngine](https://github.com/DirectoryTree/ImapEngine), a pure-PHP IMAP
+client used by `mail.php`, so the `imap` extension (unbundled from PHP in 8.4)
+is not needed. `.tool-versions` pins PHP 8.3.33 for [asdf](https://asdf-vm.com).
 
 ## Design
 
@@ -47,13 +49,13 @@ with `fetch_array(MYSQLI_ASSOC)`.
 where it is printed, with `h()` (`htmlspecialchars`) in the templates. The two
 message variables that intentionally carry `<br>` markup are the only exceptions.
 
-**Mail as the ingest path.** `storeMail($user)` opens
-`{_MAIL_SERVER:_MAIL_PORT/imap/norsh/notls}INBOX`, and `getAttachedMail()` keeps only
-messages whose decoded subject equals `$user` and whose structure is
-`multipart/mixed`. For each `JPEG` / `PNG` / `GIF` / `BMP` part it makes a
-timestamp-based file name, `imap_fetchbody()` + `imap_base64()` to get the bytes,
-writes the file, then `insertDB()` adds the row. Processed messages are flagged
-with `imap_delete()` and removed with `imap_expunge()`.
+**Mail as the ingest path.** `storeMail($user)` connects an ImapEngine
+`Mailbox` to `_MAIL_SERVER:_MAIL_PORT` and opens `INBOX`, and `getAttachedMail()`
+keeps only messages whose decoded subject equals `$user` and that have
+attachments. For each `image/jpeg` / `png` / `gif` / `bmp` attachment it makes a
+timestamp-based file name and takes the decoded bytes from the attachment,
+then `mailRegister()` writes the file and `insertDB()` adds the row. Processed
+messages are flagged with `markDeleted()` and removed with `expunge()`.
 
 **Ownership check on every mutation.** `edit.php` and the delete branch of
 `main.php` always constrain by `id = ? AND user = ?`, so a request can only
@@ -61,26 +63,12 @@ touch rows that belong to the logged-in user id.
 
 ## Setup
 
-1. **Install the toolchain.** With asdf: `asdf install` (reads `.tool-versions`).
-   Everything except the *Fetch mail* button works without the `imap` extension,
-   which the asdf PHP build does not bundle. To add it, compile just `ext/imap`
-   against the installed PHP — Debian/Ubuntu no longer ship a `php-imap` package,
-   and this asdf plugin's `PHP_CONFIGURE_OPTIONS` *replaces* its default configure
-   flags rather than extending them, so a full rebuild would have to repeat the
-   whole set:
+1. **Install the toolchain and dependencies.** With asdf: `asdf install` (reads
+   `.tool-versions`). Then install the Composer dependencies into `vendor/`
+   (git-ignored) from the repository root:
 
    ```
-   sudo apt-get install libc-client2007e-dev libkrb5-dev libssl-dev   # UW c-client + deps
-
-   curl -LO https://www.php.net/distributions/php-8.3.33.tar.gz
-   tar xf php-8.3.33.tar.gz && cd php-8.3.33/ext/imap
-   "$(asdf where php)/bin/phpize"
-   ./configure --with-php-config="$(asdf where php)/bin/php-config" \
-     --with-imap --with-imap-ssl --with-kerberos
-   make -j"$(nproc)" && make install
-   echo 'extension=imap.so' > "$(asdf where php)/conf.d/imap.ini"
-   asdf reshim php
-   php -m | grep imap
+   composer install
    ```
 
 2. **Start MySQL.** Any MySQL 8.0+ / MariaDB 10.4+ works — the SQL is
@@ -130,7 +118,7 @@ touch rows that belong to the logged-in user id.
    | --------------------------- | ------------------- | ------------------------------------ |
    | `_MAIL_SERVER`              | `127.0.0.1`         | IMAP host                            |
    | `_MAIL_PORT`                | `3143`              | IMAP port (GreenMail's test port)   |
-   | `_MAIL_FLAGS`               | `/imap/norsh/notls` | `imap_open()` flags (`/imap/ssl`, …) |
+   | `_MAIL_ENCRYPTION`          | `''` (plain)        | `ssl`, `tls` or `starttls` for TLS   |
    | `_MAIL_USER` / `_MAIL_PASS` | `demo` / `demo`     | mailbox login                        |
    | `_DB_HOST`                  | `localhost`         | MySQL host                           |
    | `_DB_USER` / `_DB_PASS`     | `demo` / `demo`     | MySQL login                          |
@@ -151,8 +139,8 @@ php -S localhost:8000
 
 Open <http://localhost:8000/>, enter a user id, and press *Log in*. Use *[Edit]*
 to add a caption, place and comment, and *Delete* to remove a photo (the file
-under `images/` is unlinked too). *Fetch mail* needs the `imap` extension and a
-reachable mailbox — see below.
+under `images/` is unlinked too). *Fetch mail* needs a reachable mailbox — see
+below.
 
 ## Shutdown
 
@@ -174,9 +162,9 @@ The data directory persists, so the next session skips step 2's
 
 The importer is an IMAP *consumer*; it never sends mail. `storeMail()` logs into
 the mailbox at `_MAIL_SERVER:_MAIL_PORT`, keeps messages whose **subject equals
-the logged-in user id** and that carry a `multipart/mixed` image attachment,
-writes each `JPEG` / `PNG` / `GIF` / `BMP` part into `images/`, inserts a row,
-then deletes the message from the mailbox.
+the logged-in user id** and that carry attachments, writes each `JPEG` / `PNG` /
+`GIF` / `BMP` attachment into `images/`, inserts a row, then deletes the message
+from the mailbox.
 
 To exercise it locally you need a plain (non-TLS) IMAP server on the configured
 port. [GreenMail](https://greenmail-mail-test.github.io/greenmail/) is the
@@ -205,9 +193,8 @@ may resolve to IPv6 `::1`, where GreenMail is not listening). Point them elsewhe
 only if your IMAP server differs.
 
 `getAttachedMail()` keeps a message only if its decoded subject is *exactly* the
-login user id, its top level is `multipart/mixed`, and its image part is
-`base64`-encoded. Ordinary mail clients tend to miss one of these, so send the
-test message with a script:
+login user id and it has an image attachment. The easiest way to get both right
+is to send the test message with a script:
 
 ```
 python3 - path/to/photo.jpg <<'PY'
@@ -246,8 +233,9 @@ web-programming class, built on top of a sample PHP uploader that was circulatin
 as course material. This repository keeps that original shape — plain PHP,
 server-rendered pages, IMAP ingestion, a single MySQL table — while replacing the
 string-concatenated SQL with prepared statements, swapping the site-specific mail
-server and account names for placeholders, and lifting the UI strings into an
-English / Japanese message catalogue.
+server and account names for placeholders, lifting the UI strings into an
+English / Japanese message catalogue, and moving the mail import from the
+`imap` extension to a pure-PHP IMAP client.
 
 ## Scope
 

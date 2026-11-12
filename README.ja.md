@@ -28,9 +28,11 @@ MySQL へ 1 行記録します。あとは各写真にタイトル・場所・�
 
 ## 技術スタック
 
-`mysqli` / `mbstring` / `imap` 拡張を有効にした PHP 8.3 と MySQL。フレームワークや
-Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / `mail`)と
-`dao.php` / `i18n.php`、それに `lang/` のカタログだけです。
+`mysqli` / `mbstring` 拡張を有効にした PHP 8.3 と MySQL。フレームワークはなし。
+ページスクリプト(`index` / `main` / `edit` / `mail`)と `dao.php` / `i18n.php`、
+それに `lang/` のカタログだけです。Composer 依存は `mail.php` が使う純 PHP の IMAP
+クライアント [ImapEngine](https://github.com/DirectoryTree/ImapEngine) の 1 つだけで、
+`imap` 拡張(PHP 8.4 で本体から分離)は不要です。
 `.tool-versions` は [asdf](https://asdf-vm.com) 用に PHP 8.3.33 を pin しています。
 
 ## 設計
@@ -47,12 +49,12 @@ Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / 
 テンプレートの `h()`(`htmlspecialchars`)によりエスケープします。意図的に `<br>` を
 含む 2 つのメッセージ変数だけが例外です。
 
-**取り込み経路としてのメール。** `storeMail($user)` が
-`{_MAIL_SERVER:_MAIL_PORT/imap/norsh/notls}INBOX` を開き、`getAttachedMail()` は、デコード後の
-件名が `$user` に一致し、構造が `multipart/mixed` のメッセージだけを残します。`JPEG` /
-`PNG` / `GIF` / `BMP` の各パートについてタイムスタンプ由来のファイル名を作り、
-`imap_fetchbody()` + `imap_base64()` でバイト列を得てファイルに書き、`insertDB()` で行を
-追加します。処理済みメッセージは `imap_delete()` でフラグを立て、`imap_expunge()` で削除
+**取り込み経路としてのメール。** `storeMail($user)` が ImapEngine の `Mailbox` で
+`_MAIL_SERVER:_MAIL_PORT` に接続して `INBOX` を開き、`getAttachedMail()` は、デコード後の
+件名が `$user` に一致し、添付ファイルを持つメッセージだけを残します。`image/jpeg` /
+`png` / `gif` / `bmp` の各添付についてタイムスタンプ由来のファイル名を作り、添付から
+デコード済みのバイト列を取り出します。`mailRegister()` がファイルに書き、`insertDB()` で
+行を追加します。処理済みメッセージは `markDeleted()` でフラグを立て、`expunge()` で削除
 します。
 
 **更新のたびに所有者チェック。** `edit.php` と `main.php` の削除分岐は常に
@@ -60,25 +62,12 @@ Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / 
 
 ## セットアップ
 
-1. **ツールチェーンを入れる。** asdf なら `asdf install`(`.tool-versions` を読む)。
-   *Fetch mail* ボタン以外は `imap` 拡張なしで動きます。asdf の PHP ビルドには
-   `imap` が含まれないので、必要なら `ext/imap` だけをインストール済みの PHP に対して
-   ビルドします。Debian / Ubuntu は `php-imap` パッケージを廃止しており、また この
-   asdf プラグインの `PHP_CONFIGURE_OPTIONS` は既定の configure フラグを**拡張ではなく
-   置換**するため、丸ごと再ビルドする場合は全フラグを書き直す必要があります:
+1. **ツールチェーンと依存パッケージを入れる。** asdf なら `asdf install`
+   (`.tool-versions` を読む)。続けてリポジトリのルートで Composer の依存パッケージを
+   `vendor/`(git 管理外)に入れます:
 
    ```
-   sudo apt-get install libc-client2007e-dev libkrb5-dev libssl-dev   # UW c-client + 依存
-
-   curl -LO https://www.php.net/distributions/php-8.3.33.tar.gz
-   tar xf php-8.3.33.tar.gz && cd php-8.3.33/ext/imap
-   "$(asdf where php)/bin/phpize"
-   ./configure --with-php-config="$(asdf where php)/bin/php-config" \
-     --with-imap --with-imap-ssl --with-kerberos
-   make -j"$(nproc)" && make install
-   echo 'extension=imap.so' > "$(asdf where php)/conf.d/imap.ini"
-   asdf reshim php
-   php -m | grep imap
+   composer install
    ```
 
 2. **MySQL を起動する。** MySQL 8.0 以降 / MariaDB 10.4 以降なら何でも可(SQL は
@@ -126,7 +115,7 @@ Composer 依存はなし。ページスクリプト(`index` / `main` / `edit` / 
    | --------------------------- | ------------------- | ----------------------------------- |
    | `_MAIL_SERVER`              | `127.0.0.1`         | IMAP ホスト                         |
    | `_MAIL_PORT`                | `3143`              | IMAP ポート(GreenMail のテストポート) |
-   | `_MAIL_FLAGS`               | `/imap/norsh/notls` | `imap_open()` のフラグ(`/imap/ssl` 等) |
+   | `_MAIL_ENCRYPTION`          | `''`(平文)        | TLS なら `ssl` / `tls` / `starttls` |
    | `_MAIL_USER` / `_MAIL_PASS` | `demo` / `demo`     | メールボックスのログイン            |
    | `_DB_HOST`                  | `localhost`         | MySQL ホスト                        |
    | `_DB_USER` / `_DB_PASS`     | `demo` / `demo`     | MySQL のログイン                    |
@@ -147,8 +136,7 @@ php -S localhost:8000
 
 <http://localhost:8000/> を開き、ユーザ ID を入れて *Log in* を押します。*[Edit]* で
 タイトル・場所・コメントを付け、*Delete* で写真を消します(`images/` 下のファイルも
-unlink されます)。*Fetch mail* には `imap` 拡張と到達可能なメールボックスが必要です
-(下記参照)。
+unlink されます)。*Fetch mail* には到達可能なメールボックスが必要です(下記参照)。
 
 ## 停止
 
@@ -170,9 +158,8 @@ PHP サーバ(と、起動していれば GreenMail)は `Ctrl-C` で止めます
 
 取り込み側は IMAP の *コンシューマ* で、メールの送信は一切しません。`storeMail()` は
 `_MAIL_SERVER:_MAIL_PORT` のメールボックスにログインし、**件名がログイン中のユーザ ID
-と一致**し、`multipart/mixed` の画像添付を持つメールだけを残して、各 `JPEG` / `PNG` /
-`GIF` / `BMP` パートを `images/` に書き、行を INSERT し、そのメールをメールボックスから
-削除します。
+と一致**し、添付ファイルを持つメールだけを残して、各 `JPEG` / `PNG` / `GIF` / `BMP` の
+添付を `images/` に書き、行を INSERT し、そのメールをメールボックスから削除します。
 
 ローカルで試すには、設定ポートで平文(非 TLS)の IMAP サーバが要ります。
 [GreenMail](https://greenmail-mail-test.github.io/greenmail/) が最も軽量です
@@ -199,9 +186,9 @@ java -Dgreenmail.setup.test.all -Dgreenmail.users=demo:demo@localhost \
 なのは、`::1` に解決されて GreenMail が待ち受けていない場合があるため)。別の IMAP サーバ
 を使うときだけ書き換えてください。
 
-`getAttachedMail()` は、デコード後の件名がログイン用ユーザ ID と**完全一致**し、最上位が
-`multipart/mixed`、かつ画像パートが `base64` エンコードのメールだけを残します。通常の
-メールクライアントはこのどれかを外しがちなので、テストメールはスクリプトで送ります:
+`getAttachedMail()` は、デコード後の件名がログイン用ユーザ ID と**完全一致**し、画像の
+添付を持つメールだけを残します。両方を確実に満たすには、テストメールをスクリプトで送るのが
+簡単です:
 
 ```
 python3 - path/to/photo.jpg <<'PY'
@@ -237,7 +224,8 @@ UI は英語と日本語を同梱しています。`i18n.php` が言語を `?lan
 元の形(素の PHP、サーバレンダリングのページ、IMAP 取り込み、MySQL テーブル 1 つ)を
 保ったまま、文字列連結の SQL をプリペアドステートメントに置き換え、特定サイト固有の
 メールサーバ名とアカウント名をプレースホルダに差し替え、UI 文字列を英語 / 日本語の
-メッセージカタログに切り出しています。
+メッセージカタログに切り出し、メール取り込みを `imap` 拡張から純 PHP の IMAP
+クライアントに移しています。
 
 ## 位置づけ
 

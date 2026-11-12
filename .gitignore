@@ -5,7 +5,6 @@
 
 ### PHP ###
 vendor/
-composer.lock
 *.log
 
 ### asdf / local tooling ###

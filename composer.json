@@ -1,0 +1,15 @@
+{
+    "name": "annupuri/php-mail-photo-import-demo",
+    "description": "Plain-PHP demo that imports photos attached to mail over IMAP into a MySQL-backed gallery",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "directorytree/imapengine": "^1.25"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.33"
+        }
+    }
+}
